@@ -84,3 +84,13 @@ input[type='date']::-webkit-calendar-picker-indicator {
   .report-section svg, .report-section > div > .grid { break-inside: avoid; }
   thead { display: table-header-group; }
 }
+
+/* צילום הדוח ל-PDF: רוחב קבוע של עמוד A4 */
+.pdf-capture {
+  width: 760px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+.pdf-capture .sm\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }

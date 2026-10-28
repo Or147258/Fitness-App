@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Printer } from 'lucide-react'
+import { ChevronRight, Download, Printer, Share2 } from 'lucide-react'
+import { canShareFiles, reportToPdf, shareOrDownload } from '../lib/pdf'
+import { toast } from '../components/ui'
 import { GLUCOSE_CONTEXTS, useStore } from '../store/useStore'
 import { LineChart } from '../components/LineChart'
 import { Copyright } from '../components/Copyright'
@@ -21,7 +23,7 @@ const n1 = (v) => (v == null ? '—' : v.toFixed(1))
 
 function Stats({ items }) {
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+    <div className="pdf-block grid grid-cols-3 gap-2 sm:grid-cols-6">
       {items.map(([label, value]) => (
         <div key={label} className="rounded-lg border border-zinc-200 px-2 py-1.5">
           <div className="text-[10px] text-zinc-500">{label}</div>
@@ -111,6 +113,22 @@ export default function Report() {
 
   const saveName = (v) => { setName(v); updateSettings({ reportName: v }) }
   const nothing = !(show.weight && W.length) && !(show.glucose && G.length) && !(show.pressure && B.length)
+  const pageRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const shareable = useMemo(canShareFiles, [])
+  const makePdf = async (share) => {
+    setBusy(true)
+    try {
+      const file = await reportToPdf(pageRef.current, `דוח-מדדים-${to}.pdf`)
+      const r = await shareOrDownload(file, share)
+      if (r === 'downloaded') toast('הקובץ נשמר בתיקיית ההורדות')
+    } catch (err) {
+      console.error(err)
+      toast('יצירת ה-PDF נכשלה — נסה שוב')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="min-h-dvh bg-zinc-200 pb-10 print:bg-white print:pb-0">
@@ -120,9 +138,20 @@ export default function Report() {
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="btn-icon rounded-full" aria-label="חזרה"><ChevronRight size={20} /></button>
             <h1 className="flex-1 text-lg font-bold">דוח לרופא</h1>
-            <button className="btn-primary h-10 px-4 text-sm" onClick={() => window.print()} disabled={nothing}>
-              <Printer size={16} /> הדפסה / PDF
+            <button className="btn-icon" onClick={() => window.print()} disabled={nothing} aria-label="הדפסה" title="הדפסה">
+              <Printer size={18} />
             </button>
+          </div>
+          <div className={`grid gap-2 ${shareable ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <button className="btn-primary h-11 text-sm" onClick={() => makePdf(false)} disabled={nothing || busy}>
+              {busy ? <span className="size-4 animate-spin rounded-full border-2 border-ink-950 border-t-transparent" /> : <Download size={17} />}
+              שמור PDF
+            </button>
+            {shareable && (
+              <button className="btn-ghost h-11 text-sm" onClick={() => makePdf(true)} disabled={nothing || busy}>
+                <Share2 size={17} /> שלח (וואטסאפ / מייל)
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {PERIODS.map((p) => (
@@ -143,12 +172,12 @@ export default function Report() {
             ))}
             <input className="input h-8 flex-1 px-3 text-xs" placeholder="שם שיופיע בדוח (לא חובה)" value={name} onChange={(e) => saveName(e.target.value)} />
           </div>
-          <p className="text-[11px] text-zinc-500">בטלפון: אחרי הלחיצה בוחרים "שמור כ-PDF" או שיתוף ← הדפסה. במחשב: יעד ← "שמירה כ-PDF".</p>
+          {nothing && <p className="text-[11px] text-amber-300/80">אין נתונים בתקופה ובמדדים שנבחרו — בחר תקופה ארוכה יותר או מדד אחר.</p>}
         </div>
       </div>
 
       {/* הדף עצמו */}
-      <article className="report-page mx-auto mt-4 max-w-3xl bg-white px-6 py-7 text-zinc-900 shadow-xl print:mt-0 print:max-w-none print:px-0 print:py-0 print:shadow-none sm:px-10">
+      <article ref={pageRef} className="report-page mx-auto mt-4 max-w-3xl bg-white px-6 py-7 text-zinc-900 shadow-xl print:mt-0 print:max-w-none print:px-0 print:py-0 print:shadow-none sm:px-10">
         <header className="flex items-start justify-between gap-4 border-b border-zinc-300 pb-3">
           <div>
             <h1 className="text-2xl font-extrabold">דוח מדדים</h1>
@@ -173,7 +202,7 @@ export default function Report() {
               ['טווח', <span dir="ltr">{n1(Math.min(...W.map((w) => w.kg)))}–{n1(Math.max(...W.map((w) => w.kg)))}</span>],
               ['שקילות', W.length],
             ]} />
-            <div className="mx-auto max-w-lg"><LineChart theme="light" digits={1} minPad={0.5} from={from} to={to} label="גרף משקל" series={[
+            <div className="pdf-block mx-auto max-w-lg"><LineChart theme="light" digits={1} minPad={0.5} from={from} to={to} label="גרף משקל" series={[
               { label: 'שקילה', color: '#a1a1aa', points: W.map((w) => ({ date: w.date, v: w.kg })), width: 0.01 },
               { label: 'ממוצע 7 ימים', color: '#65a30d', points: rollingAverage(weights).filter(inRange).map((w) => ({ date: w.date, v: w.kg })), dots: false },
             ]} /></div>
@@ -192,7 +221,7 @@ export default function Report() {
               ['ממוצע בצום', n0(avg(G.filter((g) => g.context === 'fasting').map((g) => g.value)))],
             ]} />
             <Table head={['מתי נמדד', 'מדידות', 'ממוצע', 'מינימום', 'מקסימום']} rows={byContext} />
-            <div className="mx-auto max-w-lg"><LineChart theme="light" minPad={5} from={from} to={to} label="גרף סוכר"
+            <div className="pdf-block mx-auto max-w-lg"><LineChart theme="light" minPad={5} from={from} to={to} label="גרף סוכר"
               series={sugarChart.length ? sugarChart : [{ label: 'ממוצע יומי', color: '#ea580c', points: sugarAllPts }]} /></div>
             <Table head={['תאריך', ...GLUCOSE_CONTEXTS.map((c) => c.label)]} rows={sugarDays} />
           </Section>
@@ -208,7 +237,7 @@ export default function Report() {
               ['מדידות', B.length],
               ['ימים עם מדידה', new Set(B.map((x) => x.date)).size],
             ]} />
-            <div className="mx-auto max-w-lg"><LineChart theme="light" minPad={5} from={from} to={to} label="גרף לחץ דם" series={[
+            <div className="pdf-block mx-auto max-w-lg"><LineChart theme="light" minPad={5} from={from} to={to} label="גרף לחץ דם" series={[
               { label: 'עליון', color: '#0284c7', points: dailyAverages(B, (x) => x.sys).map((d) => ({ date: d.date, v: d.kg })) },
               { label: 'תחתון', color: '#7c3aed', points: dailyAverages(B, (x) => x.dia).map((d) => ({ date: d.date, v: d.kg })) },
             ]} /></div>
