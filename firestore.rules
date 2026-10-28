@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// חוקי האבטחה של Firestore: כל משתמש מחובר יכול לקרוא ולכתוב
+// אך ורק את המסמכים שתחת users/{ה-UID שלו}. כל השאר חסום.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

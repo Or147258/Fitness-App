@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-ink-950 font-sans text-zinc-100 antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/[0.06] bg-ink-900;
+  }
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-xl font-semibold transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn h-12 bg-lime-400 px-5 text-ink-950 shadow-[0_8px_24px_-8px_rgba(163,230,53,.55)];
+  }
+  .btn-ghost {
+    @apply btn h-11 bg-white/[0.06] px-4 text-zinc-100 hover:bg-white/10;
+  }
+  .btn-danger {
+    @apply btn h-11 bg-rose-500/15 px-4 text-rose-300;
+  }
+  .btn-icon {
+    @apply btn size-10 shrink-0 bg-white/[0.06] text-zinc-300;
+  }
+  .input {
+    @apply h-12 w-full rounded-xl border border-white/10 bg-ink-800 px-4 text-base text-zinc-100 placeholder:text-zinc-500 focus:border-lime-400/60 focus:outline-none focus:ring-2 focus:ring-lime-400/20;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-zinc-400;
+  }
+  .section-title {
+    @apply mb-2 mt-6 px-1 text-sm font-semibold text-zinc-400;
+  }
+}
