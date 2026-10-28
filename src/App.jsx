@@ -4,6 +4,9 @@ import Layout from './components/Layout'
 import { Toaster } from './components/ui'
 import Home from './pages/Home'
 import Weight from './pages/Weight'
+import Sugar from './pages/Sugar'
+import Pressure from './pages/Pressure'
+import Report from './pages/Report'
 import Workouts from './pages/Workouts'
 import WorkoutEdit from './pages/WorkoutEdit'
 import Exercises from './pages/Exercises'
@@ -33,6 +36,8 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="weight" element={<Weight />} />
+              <Route path="sugar" element={<Sugar />} />
+              <Route path="pressure" element={<Pressure />} />
               <Route path="workouts" element={<Workouts />} />
               <Route path="workouts/:id" element={<WorkoutEdit />} />
               <Route path="exercises" element={<Exercises />} />
@@ -41,6 +46,8 @@ export default function App() {
             </Route>
             {/* מסך האימון הפעיל — מסך מלא בלי ניווט תחתון */}
             <Route path="active" element={<ActiveWorkout />} />
+            {/* דוח לרופא — מסך מלא להדפסה / שמירה כ-PDF */}
+            <Route path="report" element={<Report />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

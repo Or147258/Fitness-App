@@ -52,3 +52,23 @@ export const sessionVolume = (session) =>
   session.exercises.reduce((sum, ex) => sum + ex.sets.reduce((s, st) => s + st.weight * st.reps, 0), 0)
 
 export const sessionSetCount = (session) => session.exercises.reduce((n, ex) => n + ex.sets.length, 0)
+
+/** 1RM משוער (נוסחת Epley) — מה המשקל המקסימלי לחזרה אחת לפי סט עם כמה חזרות */
+export const estimate1RM = (st) => (st.reps <= 1 ? st.weight : st.weight * (1 + Math.min(st.reps, 12) / 30))
+
+/** נקודה לכל אימון שבו בוצע התרגיל: משקל מקסימלי, 1RM משוער, נפח וחזרות מקסימליות */
+export function exerciseProgress(sessions, exerciseId) {
+  return [...sessions]
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .flatMap((s) => {
+      const ex = s.exercises.find((x) => x.exerciseId === exerciseId)
+      if (!ex?.sets.length) return []
+      return [{
+        date: s.date,
+        maxWeight: Math.max(...ex.sets.map((x) => x.weight)),
+        e1rm: Math.max(...ex.sets.map(estimate1RM)),
+        volume: ex.sets.reduce((v, x) => v + x.weight * x.reps, 0),
+        maxReps: Math.max(...ex.sets.map((x) => x.reps)),
+      }]
+    })
+}

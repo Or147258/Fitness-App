@@ -5,6 +5,9 @@ import { useStore } from '../store/useStore'
 import { PageHeader, Segmented, Empty, ConfirmSheet } from '../components/ui'
 import { WeightEntry, DeltaBadge } from '../components/WeightEntry'
 import { WeightChart } from '../components/WeightChart'
+import { MetricsTabs } from '../components/MetricsTabs'
+import { ReportButton } from './Pressure'
+import { GoalCard } from '../components/GoalCard'
 import { describeDelta, fmtKg, monthlyAverages, trend, weeklyAverages } from '../lib/weightStats'
 import { longDate, monthLabel, shortDate, toKey, weekStartKey } from '../lib/date'
 
@@ -36,6 +39,7 @@ export default function Weight() {
     return (
       <>
         <PageHeader title="מעקב משקל" />
+        <MetricsTabs />
         <div className="space-y-4 px-4">
           <div className="card p-4"><WeightEntry /></div>
           <Empty icon={Scale} title="עוד אין שקילות" text="מומלץ להישקל כל בוקר באותם תנאים. האפליקציה תחשב ממוצע שבועי וחודשי ותראה לך את המגמה." />
@@ -48,7 +52,8 @@ export default function Weight() {
 
   return (
     <>
-      <PageHeader title="מעקב משקל" subtitle={`${weights.length} שקילות`} />
+      <PageHeader title="מעקב משקל" subtitle={`${weights.length} שקילות`} action={<ReportButton />} />
+      <MetricsTabs />
       <div className="space-y-4 px-4">
         <div className="card p-4"><WeightEntry /></div>
 
@@ -62,6 +67,8 @@ export default function Weight() {
             <span className="ms-1.5 text-[11px] text-zinc-500">מול חודש קודם</span>
           </Stat>
         </div>
+
+        <GoalCard />
 
         <div className="card p-4">
           <div className="mb-3 flex items-center justify-between gap-3">

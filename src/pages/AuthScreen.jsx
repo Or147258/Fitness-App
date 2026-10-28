@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Dumbbell, Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { Segmented, toast } from '../components/ui'
+import { Copyright } from '../components/Copyright'
 import { hebrewError, resetPassword, signIn, signUp } from '../lib/sync'
 
 /** מסך התחברות / הרשמה — מוצג לפני כל האפליקציה */
@@ -139,6 +140,7 @@ export default function AuthScreen() {
           )}
         </div>
       </div>
+      <Copyright className="pb-4" />
     </div>
   )
 }

@@ -17,15 +17,31 @@ export const DEFAULT_SETTINGS = {
   sound: true,
   vibrate: true,
   weightGoal: 'cut', // cut | bulk | maintain — קובע אם ירידה מוצגת בירוק או באדום
+  showGlucose: true, // סוכר בכרטיס המדידות בדף הבית
+  showPressure: true, // לחץ דם בכרטיס המדידות בדף הבית
+  goalWeight: null, // משקל יעד בק״ג
+  goalStart: null, // { date, kg } — נקודת ההתחלה כשהוגדר היעד
+  reportName: '', // שם שיופיע בדוח לרופא
+  reminders: { weight: '07:30', glucose: '07:45', pressure: '08:00' },
 }
 
 /**
  * Outbox: תור של שינויים שעוד לא נשלחו ל-Firestore.
  * כל שינוי נשמר קודם מקומית (מיידי, עובד בלי קליטה) ונשלח לענן תחת ה-UID של המשתמש.
  */
-function enqueue(outbox, entity, id, kind = 'upsert') {
-  return [...outbox.filter((o) => !(o.entity === entity && o.id === id)), { entity, id, kind, at: Date.now() }]
+function enqueue(outbox, entity, id, kind = 'upsert', extra = {}) {
+  return [...outbox.filter((o) => !(o.entity === entity && o.id === id)), { entity, id, kind, at: Date.now(), ...extra }]
 }
+
+export const GLUCOSE_CONTEXTS = [
+  { id: 'fasting', label: 'בצום' },
+  { id: 'before', label: 'לפני ארוחה' },
+  { id: 'after', label: 'אחרי ארוחה' },
+  { id: 'bedtime', label: 'לפני שינה' },
+  { id: 'other', label: 'אחר' },
+]
+
+const byDateTime = (a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')
 
 const toNum = (v) => {
   const n = parseFloat(String(v).replace(',', '.'))
@@ -49,6 +65,8 @@ function buildActiveExercise(exerciseId, sessions, targetSets = 3, restSec = nul
 
 const initialData = {
   weights: [], // { date: 'YYYY-MM-DD', kg }
+  glucose: [], // מדידות סוכר: { id, date, time: 'HH:MM', value (mg/dL), context, note }
+  pressure: [], // לחץ דם: { id, date, time, sys, dia, pulse, note }
   exercises: BUILTIN_EXERCISES, // { id, name, muscle, builtin, mediaUrl, mediaType, notes }
   programs: [], // { id, name, exercises: [{ uid, exerciseId, sets, reps, restSec }] }
   sessions: [], // היסטוריה: { id, programId, programName, date, startedAt, endedAt, durationSec, exercises: [{ exerciseId, sets: [{ weight, reps }] }] }
@@ -76,6 +94,63 @@ export const useStore = create(
           weights: s.weights.filter((w) => w.date !== date),
           outbox: enqueue(s.outbox, 'weight', date, 'delete'),
         })),
+
+      /* ---------- סוכר בדם ---------- */
+      addGlucose: (data) => {
+        const id = uid()
+        set((s) => ({
+          glucose: [...s.glucose, { note: '', ...data, id }].sort(byDateTime),
+          outbox: enqueue(s.outbox, 'glucose', id),
+        }))
+        return id
+      },
+
+      updateGlucose: (id, patch) =>
+        set((s) => {
+          const prev = s.glucose.find((g) => g.id === id)
+          return {
+            glucose: s.glucose.map((g) => (g.id === id ? { ...g, ...patch } : g)).sort(byDateTime),
+            // אם התאריך השתנה — גם הממוצע של השבוע הקודם מתעדכן
+            outbox: enqueue(s.outbox, 'glucose', id, 'upsert', { date: prev?.date }),
+          }
+        }),
+
+      deleteGlucose: (id) =>
+        set((s) => {
+          const prev = s.glucose.find((g) => g.id === id)
+          return {
+            glucose: s.glucose.filter((g) => g.id !== id),
+            outbox: enqueue(s.outbox, 'glucose', id, 'delete', { date: prev?.date }),
+          }
+        }),
+
+      /* ---------- לחץ דם ---------- */
+      addPressure: (data) => {
+        const id = uid()
+        set((s) => ({
+          pressure: [...s.pressure, { note: '', pulse: null, ...data, id }].sort(byDateTime),
+          outbox: enqueue(s.outbox, 'pressure', id),
+        }))
+        return id
+      },
+
+      updatePressure: (id, patch) =>
+        set((s) => {
+          const prev = s.pressure.find((x) => x.id === id)
+          return {
+            pressure: s.pressure.map((x) => (x.id === id ? { ...x, ...patch } : x)).sort(byDateTime),
+            outbox: enqueue(s.outbox, 'pressure', id, 'upsert', { date: prev?.date }),
+          }
+        }),
+
+      deletePressure: (id) =>
+        set((s) => {
+          const prev = s.pressure.find((x) => x.id === id)
+          return {
+            pressure: s.pressure.filter((x) => x.id !== id),
+            outbox: enqueue(s.outbox, 'pressure', id, 'delete', { date: prev?.date }),
+          }
+        }),
 
       /* ---------- מאגר תרגילים ---------- */
       addExercise: (data) => {
@@ -318,14 +393,16 @@ export const useStore = create(
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch }, outbox: enqueue(s.outbox, 'settings', 'me') })),
 
       exportData: () => {
-        const { weights, exercises, programs, sessions, settings } = get()
-        return { app: 'fitness-app', version: 1, exportedAt: new Date().toISOString(), weights, exercises, programs, sessions, settings }
+        const { weights, glucose, pressure, exercises, programs, sessions, settings } = get()
+        return { app: 'fitness-app', version: 1, exportedAt: new Date().toISOString(), weights, glucose, pressure, exercises, programs, sessions, settings }
       },
 
       importData: (data) => {
         if (!data || !Array.isArray(data.weights) || !Array.isArray(data.sessions)) throw new Error('קובץ לא תקין')
         set({
           weights: data.weights,
+          glucose: data.glucose ?? [],
+          pressure: data.pressure ?? [],
           exercises: data.exercises?.length ? data.exercises : BUILTIN_EXERCISES,
           programs: data.programs ?? [],
           sessions: data.sessions,
@@ -348,6 +425,8 @@ export const useStore = create(
           s.exercises.filter((e) => !isPristineBuiltin(e)).forEach((e) => { outbox = enqueue(outbox, 'exercise', e.id) })
           s.programs.forEach((p) => { outbox = enqueue(outbox, 'program', p.id) })
           s.weights.forEach((w) => { outbox = enqueue(outbox, 'weight', w.date) })
+          s.glucose.forEach((g) => { outbox = enqueue(outbox, 'glucose', g.id) })
+          s.pressure.forEach((x) => { outbox = enqueue(outbox, 'pressure', x.id) })
           s.sessions.forEach((x) => { outbox = enqueue(outbox, 'session', x.id) })
           outbox = enqueue(outbox, 'settings', 'me')
           return { outbox }
@@ -356,16 +435,18 @@ export const useStore = create(
       ackOps: (ops) =>
         set((s) => ({ outbox: s.outbox.filter((o) => !ops.some((d) => d.entity === o.entity && d.id === o.id && d.at === o.at)) })),
 
-      replaceFromRemote: ({ weights, exercises, programs, sessions, settings }) =>
+      replaceFromRemote: ({ weights, glucose, pressure, exercises, programs, sessions, settings }) =>
         set(() => {
           // תרגילים מובנים חדשים (אם נוספו בגרסה חדשה של האפליקציה) נשמרים גם אם עוד לא בענן
           const ids = new Set(exercises.map((e) => e.id))
           return {
             weights,
+            glucose: glucose ?? [],
+            pressure: pressure ?? [],
             exercises: [...exercises.map(withDefaultMedia), ...BUILTIN_EXERCISES.filter((b) => !ids.has(b.id))],
             programs,
             sessions,
-            ...(settings ? { settings: { ...DEFAULT_SETTINGS, ...settings } } : {}),
+            ...(settings ? { settings: { ...DEFAULT_SETTINGS, ...settings, reminders: { ...DEFAULT_SETTINGS.reminders, ...settings.reminders } } } : {}),
             lastSyncAt: new Date().toISOString(),
           }
         }),
@@ -379,9 +460,11 @@ export const useStore = create(
       // מוסיף תרגילים מובנים שנוספו בגרסאות חדשות בלי לדרוס את הנתונים שלך
       merge: (persisted, current) => {
         const merged = { ...current, ...persisted }
+        merged.glucose = merged.glucose ?? []
+        merged.pressure = merged.pressure ?? []
         const ids = new Set((merged.exercises ?? []).map((e) => e.id))
         merged.exercises = [...(merged.exercises ?? []).map(withDefaultMedia), ...BUILTIN_EXERCISES.filter((b) => !ids.has(b.id))]
-        merged.settings = { ...DEFAULT_SETTINGS, ...persisted?.settings }
+        merged.settings = { ...DEFAULT_SETTINGS, ...persisted?.settings, reminders: { ...DEFAULT_SETTINGS.reminders, ...persisted?.settings?.reminders } }
         return merged
       },
     },

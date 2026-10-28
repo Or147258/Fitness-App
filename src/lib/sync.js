@@ -33,11 +33,12 @@ const col = (uid, name) => collection(db, 'users', uid, name)
 const ref = (uid, name, id) => doc(db, 'users', uid, name, id)
 
 /* ---------- בניית פעולות כתיבה מה-outbox ---------- */
-function weeklyAverageOps(uid, weights, dateKey) {
+/** ממוצע שבועי (ראשון–שבת) שנשמר במאגר — למשקל ולסוכר */
+function weeklyAverageOps(uid, items, dateKey, colName = 'weeklyAverages', value = (w) => w.kg) {
   const ws = weekStartKey(dateKey)
   const we = toKey(addDays(fromKey(ws), 6))
-  const inWeek = weights.filter((w) => w.date >= ws && w.date <= we).map((w) => w.kg)
-  const r = ref(uid, 'weeklyAverages', ws)
+  const inWeek = items.filter((w) => w.date >= ws && w.date <= we).map(value)
+  const r = ref(uid, colName, ws)
   if (!inWeek.length) return [{ type: 'delete', ref: r }]
   const avg = inWeek.reduce((a, b) => a + b, 0) / inWeek.length
   return [{
@@ -55,6 +56,22 @@ function weeklyAverageOps(uid, weights, dateKey) {
   }]
 }
 
+/** ממוצע שבועי ללחץ דם: bloodPressureWeeklyAverages/{weekStart} */
+function pressureWeeklyOps(uid, items, dateKey) {
+  const ws = weekStartKey(dateKey)
+  const we = toKey(addDays(fromKey(ws), 6))
+  const inWeek = items.filter((x) => x.date >= ws && x.date <= we)
+  const r = ref(uid, 'bloodPressureWeeklyAverages', ws)
+  if (!inWeek.length) return [{ type: 'delete', ref: r }]
+  const avg = (arr) => (arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : null)
+  return [{ type: 'set', ref: r, data: {
+    weekStart: ws, weekEnd: we, count: inWeek.length,
+    sysAvg: avg(inWeek.map((x) => x.sys)), diaAvg: avg(inWeek.map((x) => x.dia)),
+    pulseAvg: avg(inWeek.map((x) => x.pulse).filter((v) => v != null)),
+    updatedAt: serverTimestamp(),
+  } }]
+}
+
 const clean = (o) => JSON.parse(JSON.stringify(o)) // Firestore לא מקבל undefined
 
 function opsFor(op, state, uid) {
@@ -66,6 +83,27 @@ function opsFor(op, state, uid) {
         ? del('weights')
         : [{ type: 'set', ref: ref(uid, 'weights', op.id), data: { date: w.date, kg: w.kg, updatedAt: serverTimestamp() } }]
       return [...main, ...weeklyAverageOps(uid, state.weights, op.id)]
+    }
+    case 'glucose': {
+      const g = state.glucose.find((x) => x.id === op.id)
+      const main = op.kind === 'delete' || !g
+        ? del('glucose')
+        : [{ type: 'set', ref: ref(uid, 'glucose', g.id), data: clean({
+            date: g.date, time: g.time, value: g.value, context: g.context, note: g.note ?? '', updatedAt: serverTimestamp(),
+          }) }]
+      // מעדכנים את הממוצע השבועי של התאריך הנוכחי, ושל התאריך הקודם אם המדידה הועברה/נמחקה
+      const dates = [...new Set([g?.date, op.date].filter(Boolean))]
+      return [...main, ...dates.flatMap((d) => weeklyAverageOps(uid, state.glucose, d, 'glucoseWeeklyAverages', (x) => x.value))]
+    }
+    case 'pressure': {
+      const x = state.pressure.find((y) => y.id === op.id)
+      const main = op.kind === 'delete' || !x
+        ? del('bloodPressure')
+        : [{ type: 'set', ref: ref(uid, 'bloodPressure', x.id), data: clean({
+            date: x.date, time: x.time, sys: x.sys, dia: x.dia, pulse: x.pulse ?? null, note: x.note ?? '', updatedAt: serverTimestamp(),
+          }) }]
+      const dates = [...new Set([x?.date, op.date].filter(Boolean))]
+      return [...main, ...dates.flatMap((d) => pressureWeeklyOps(uid, state.pressure, d))]
     }
     case 'exercise': {
       const e = state.exercises.find((x) => x.id === op.id)
@@ -150,17 +188,25 @@ export async function pushOutbox() {
 /** מוריד את כל הנתונים של המשתמש המחובר */
 export async function pullAll() {
   const uid = auth.currentUser.uid
-  const [w, e, p, s, u] = await Promise.all([
+  const [w, e, p, s, u, g, bp] = await Promise.all([
     getDocs(col(uid, 'weights')),
     getDocs(col(uid, 'exercises')),
     getDocs(col(uid, 'programs')),
     getDocs(col(uid, 'sessions')),
     getDoc(userDoc(uid)),
+    getDocs(col(uid, 'glucose')),
+    getDocs(col(uid, 'bloodPressure')),
   ])
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 
   useStore.getState().replaceFromRemote(keepPending({
     weights: rows(w).map((r) => ({ date: r.date ?? r.id, kg: Number(r.kg) })).sort((a, b) => a.date.localeCompare(b.date)),
+    glucose: rows(g)
+      .map((r) => ({ id: r.id, date: r.date, time: r.time ?? '', value: Number(r.value), context: r.context ?? 'other', note: r.note ?? '' }))
+      .sort(byDateTime),
+    pressure: rows(bp)
+      .map((r) => ({ id: r.id, date: r.date, time: r.time ?? '', sys: Number(r.sys), dia: Number(r.dia), pulse: r.pulse == null ? null : Number(r.pulse), note: r.note ?? '' }))
+      .sort(byDateTime),
     exercises: rows(e).map((r) => ({
       id: r.id, name: r.name, muscle: r.muscle, builtin: !!r.builtin,
       mediaUrl: r.mediaUrl ?? '', mediaType: r.mediaType ?? '', notes: r.notes ?? '',
@@ -197,6 +243,8 @@ function keepPending(remote) {
   }
   return {
     weights: merge(remote.weights, local.weights, 'weight', (w) => w.date).sort((a, b) => a.date.localeCompare(b.date)),
+    glucose: merge(remote.glucose, local.glucose, 'glucose').sort(byDateTime),
+    pressure: merge(remote.pressure, local.pressure, 'pressure').sort(byDateTime),
     exercises: merge(remote.exercises, local.exercises, 'exercise'),
     programs: (() => {
       const merged = merge(remote.programs, local.programs, 'program')
@@ -241,8 +289,10 @@ export async function pushSoon() {
   }
 }
 
+const byDateTime = (a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')
+
 /* ---------- התחברות ---------- */
-const hasLocalData = (s) => s.weights.length || s.sessions.length || s.programs.length
+const hasLocalData = (s) => s.weights.length || s.glucose?.length || s.pressure?.length || s.sessions.length || s.programs.length
 
 /** מחליף את הנתונים במכשיר לפי המשתמש שמחובר — כל משתמש רואה רק את שלו */
 async function onUserChanged(user) {

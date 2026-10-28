@@ -5,7 +5,9 @@ import { useStore } from '../store/useStore'
 import { MUSCLES } from '../data/exercises'
 import { ConfirmSheet, Sheet, toast } from './ui'
 import { ExerciseMedia } from './ExerciseMedia'
-import { computePRs, exerciseHistory, fmtPR, fmtSet } from '../lib/prs'
+import { computePRs, exerciseHistory, exerciseProgress, fmtPR, fmtSet } from '../lib/prs'
+import { LineChart } from './LineChart'
+import { Segmented } from './ui'
 import { shortDate } from '../lib/date'
 import { blobToDataUrl, compressImage, detectMediaType } from '../lib/media'
 
@@ -31,6 +33,19 @@ export function ExerciseSheet({ open, onClose, exerciseId, defaultMuscle = 'ches
 
   const pr = useMemo(() => (exerciseId ? computePRs(sessions)[exerciseId] : null), [sessions, exerciseId])
   const history = useMemo(() => (exerciseId ? exerciseHistory(sessions, exerciseId, 8) : []), [sessions, exerciseId])
+  const progress = useMemo(() => (exerciseId ? exerciseProgress(sessions, exerciseId) : []), [sessions, exerciseId])
+  const bodyweight = progress.length > 0 && progress.every((p) => p.maxWeight === 0)
+  const [metric, setMetric] = useState('e1rm')
+  const METRICS = bodyweight
+    ? [{ value: 'maxReps', label: 'חזרות מקסימום', unit: 'חזרות' }]
+    : [
+        { value: 'e1rm', label: '1RM משוער', unit: 'ק״ג' },
+        { value: 'maxWeight', label: 'משקל מקסימלי', unit: 'ק״ג' },
+        { value: 'volume', label: 'נפח', unit: 'ק״ג' },
+      ]
+  const m = METRICS.find((x) => x.value === metric) ?? METRICS[0]
+  const first = progress[0]?.[m.value]
+  const last = progress.at(-1)?.[m.value]
 
   const save = () => {
     if (!form.name.trim()) return toast('צריך שם לתרגיל')
@@ -141,6 +156,30 @@ export function ExerciseSheet({ open, onClose, exerciseId, defaultMuscle = 'ches
             />
           </div>
         </div>
+
+        {progress.length > 1 && (
+          <>
+            <h3 className="section-title">התקדמות</h3>
+            <div className="rounded-2xl bg-ink-800/60 p-3">
+              {METRICS.length > 1 && (
+                <Segmented className="mb-3" value={m.value} onChange={setMetric} options={METRICS.map(({ value, label }) => ({ value, label }))} />
+              )}
+              <LineChart
+                digits={m.value === 'volume' ? 0 : 1}
+                minPad={m.value === 'volume' ? 50 : 1}
+                height={150}
+                label={`התקדמות — ${m.label}`}
+                series={[{ label: m.label, color: '#fbbf24', points: progress.map((p) => ({ date: p.date, v: Math.round(p[m.value] * 10) / 10 })) }]}
+              />
+              <p className="mt-2 text-center text-xs text-zinc-400">
+                {m.label}: <span className="tabular font-semibold text-zinc-200">{Math.round(first)}</span> ←{' '}
+                <span className="tabular font-semibold text-amber-300">{Math.round(last)}</span> {m.unit}
+                {' '}ב-{progress.length} אימונים
+                {m.value === 'e1rm' && <span className="mt-1 block text-[11px] text-zinc-500">הערכה לפי נוסחת Epley: כמה היית מרים לחזרה אחת לפי הסט הכי טוב</span>}
+              </p>
+            </div>
+          </>
+        )}
 
         {history.length > 0 && (
           <>

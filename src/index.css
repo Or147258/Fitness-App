@@ -72,3 +72,15 @@ input[type='date']::-webkit-calendar-picker-indicator {
     @apply mb-2 mt-6 px-1 text-sm font-semibold text-zinc-400;
   }
 }
+
+/* ---------- הדפסה (דוח לרופא) ---------- */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body, #root { background: #fff !important; color: #18181b; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .no-print { display: none !important; }
+  .report-section { break-inside: auto; }
+  .report-section h2 { break-after: avoid; }
+  .report-section svg, .report-section > div > .grid { break-inside: avoid; }
+  thead { display: table-header-group; }
+}

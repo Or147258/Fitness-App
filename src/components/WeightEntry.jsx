@@ -54,13 +54,13 @@ const TONES = {
 }
 
 /** תגית הפרש: חץ + ק״ג, צבע לפי מטרה (חיטוב/מסה/שמירה) */
-export function DeltaBadge({ d, digits = 1, suffix = 'ק״ג', className = '' }) {
+export function DeltaBadge({ d, digits = 1, suffix = 'ק״ג', className = '', neutral = false }) {
   const goal = useStore((s) => s.settings.weightGoal)
   if (d == null) return <span className={`text-xs text-zinc-500 ${className}`}>—</span>
   const dir = Math.abs(d) < 0.05 ? 'flat' : d < 0 ? 'down' : 'up'
   const Icon = dir === 'flat' ? Minus : dir === 'down' ? ArrowDownRight : ArrowUpRight
   return (
-    <span className={`tabular inline-flex items-center gap-0.5 rounded-lg px-1.5 py-0.5 text-xs font-semibold ${TONES[deltaTone(dir, goal)]} ${className}`}>
+    <span className={`tabular inline-flex items-center gap-0.5 rounded-lg px-1.5 py-0.5 text-xs font-semibold ${TONES[neutral ? 'neutral' : deltaTone(dir, goal)]} ${className}`}>
       <Icon size={13} />
       <span dir="ltr">{dir === 'flat' ? '0' : `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(digits)}`}</span>
       {suffix && <span className="font-normal opacity-80">{suffix}</span>}

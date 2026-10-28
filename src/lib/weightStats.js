@@ -63,13 +63,13 @@ export function rollingAverage(weights, window = 7) {
 export const fmtKg = (n, digits = 1) => (n == null || Number.isNaN(n) ? '—' : Number(n).toFixed(digits))
 
 /** תיאור מילולי של שינוי: "ירידה של 0.8 ק״ג" */
-export function describeDelta(d, digits = 1) {
+export function describeDelta(d, digits = 1, unit = 'ק״ג') {
   if (d == null) return { dir: 'none', text: 'אין נתון להשוואה' }
   const abs = Math.abs(d)
   if (abs < 0.05) return { dir: 'flat', text: 'ללא שינוי' }
   return {
     dir: d < 0 ? 'down' : 'up',
-    text: `${d < 0 ? 'ירידה' : 'עלייה'} של ${abs.toFixed(digits)} ק״ג`,
+    text: `${d < 0 ? 'ירידה' : 'עלייה'} של ${abs.toFixed(digits)} ${unit}`,
   }
 }
 
@@ -81,3 +81,18 @@ export function deltaTone(dir, goal) {
   if (goal === 'bulk') return dir === 'up' ? 'good' : 'bad'
   return 'neutral'
 }
+
+/** ממוצע לכל יום (לסוכר: כמה מדידות ביום) → [{ date, kg }] כדי להשתמש באותם חישובים כמו במשקל */
+export function dailyAverages(readings, value = (r) => r.value) {
+  const map = new Map()
+  for (const r of readings) {
+    if (!map.has(r.date)) map.set(r.date, [])
+    map.get(r.date).push(value(r))
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, arr]) => ({ date, kg: mean(arr), count: arr.length }))
+}
+
+/** ממוצעים שבועיים/חודשיים לפי כל המדידות (לא לפי ממוצע יומי) */
+export const asKg = (readings) => readings.map((r) => ({ date: r.date, kg: r.value }))

@@ -1,11 +1,11 @@
 import React from 'react'
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Dumbbell, Play, Settings, TrendingDown, TrendingUp } from 'lucide-react'
+import { ChevronLeft, Dumbbell, Play, Settings } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import { WeightEntry, DeltaBadge } from '../components/WeightEntry'
+import { QuickMeasure } from '../components/QuickMeasure'
+import { Copyright } from '../components/Copyright'
 import { fmtDuration, HE_DAYS, HE_MONTHS, relativeDay, toKey, weekStartKey } from '../lib/date'
-import { fmtKg, trend, weeklyAverages } from '../lib/weightStats'
 import { programColor } from '../lib/colors'
 import { sessionSetCount } from '../lib/prs'
 
@@ -19,7 +19,6 @@ function greeting() {
 }
 
 export default function Home() {
-  const weights = useStore((s) => s.weights)
   const sessions = useStore((s) => s.sessions)
   const programs = useStore((s) => s.programs)
   const active = useStore((s) => s.active)
@@ -28,9 +27,6 @@ export default function Home() {
   const now = new Date()
   const today = toKey()
 
-  const weekly = useMemo(() => weeklyAverages(weights), [weights])
-  const thisWeek = weekly.find((w) => w.weekStart === weekStartKey(today))
-  const tr = useMemo(() => trend(weights, 30), [weights])
   const sorted = useMemo(() => [...sessions].sort((a, b) => b.startedAt.localeCompare(a.startedAt)), [sessions])
 
   // האימון הבא בסבב: זה שאחרי האימון האחרון שביצעת
@@ -84,30 +80,8 @@ export default function Home() {
           )
         )}
 
-        {/* משקל */}
-        <section className="card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-bold">שקילה יומית</h2>
-            <Link to="/weight" className="flex items-center text-xs text-zinc-400">לכל הנתונים <ChevronLeft size={14} /></Link>
-          </div>
-          <WeightEntry showDate={false} />
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4">
-            <div>
-              <div className="text-xs text-zinc-500">ממוצע שבועי</div>
-              <div className="tabular text-xl font-bold">{fmtKg(thisWeek?.avg)} <span className="text-xs font-normal text-zinc-500">ק״ג</span></div>
-              <DeltaBadge d={thisWeek?.diff ?? null} className="mt-1" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1 text-xs text-zinc-500">
-                {tr && tr.perWeek < 0 ? <TrendingDown size={13} /> : <TrendingUp size={13} />} קצב (30 יום)
-              </div>
-              <div className="tabular text-xl font-bold" dir="ltr" style={{ textAlign: 'right' }}>
-                {tr ? `${tr.perWeek > 0 ? '+' : tr.perWeek < 0 ? '−' : ''}${Math.abs(tr.perWeek).toFixed(2)}` : '—'}
-              </div>
-              <div className="text-xs text-zinc-500">ק״ג לשבוע</div>
-            </div>
-          </div>
-        </section>
+        {/* מדידות היום: משקל / סוכר / לחץ דם */}
+        <QuickMeasure />
 
         {/* סטטיסטיקה */}
         <div className="grid grid-cols-2 gap-3">
@@ -146,6 +120,7 @@ export default function Home() {
           </section>
         )}
       </div>
+      <Copyright className="mt-8" />
     </div>
   )
 }

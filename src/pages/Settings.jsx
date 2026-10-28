@@ -1,10 +1,12 @@
 import React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Cloud, CloudOff, Download, LogOut, RefreshCw, Smartphone, Upload } from 'lucide-react'
+import { CalendarPlus, Cloud, CloudOff, Download, LogOut, RefreshCw, Smartphone, Upload } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { Copyright } from '../components/Copyright'
 import { PageHeader, Segmented, Stepper, Toggle, ConfirmSheet, toast } from '../components/ui'
 import { fmtClock } from '../lib/date'
 import { logOut, syncNow, useSyncStatus } from '../lib/sync'
+import { REMINDER_TITLES, downloadICS } from '../lib/reminders'
 
 function Section({ title, children }) {
   return (
@@ -68,6 +70,48 @@ function Account() {
         danger
         onConfirm={doLogOut}
       />
+    </div>
+  )
+}
+
+function Reminders() {
+  const settings = useStore((s) => s.settings)
+  const updateSettings = useStore((s) => s.updateSettings)
+  const keys = ['weight', ...(settings.showGlucose ? ['glucose'] : []), ...(settings.showPressure ? ['pressure'] : [])]
+  const [on, setOn] = useState(() => Object.fromEntries(keys.map((k) => [k, true])))
+  const chosen = keys.filter((k) => on[k])
+  const setTime = (k, v) => updateSettings({ reminders: { ...settings.reminders, [k]: v } })
+
+  return (
+    <div className="space-y-3 py-1">
+      <p className="text-xs leading-relaxed text-zinc-400">
+        התזכורות נוספות ליומן של הטלפון ומתריעות כל יום בשעה שבחרת — גם כשהאפליקציה סגורה.
+        בדף הבית מסומן גם מה עוד לא נמדד היום.
+      </p>
+      {keys.map((k) => (
+        <div key={k} className="flex items-center gap-3">
+          <label className="flex flex-1 items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4 accent-lime-400" checked={!!on[k]} onChange={(e) => setOn({ ...on, [k]: e.target.checked })} />
+            {REMINDER_TITLES[k]}
+          </label>
+          <input type="time" className="input h-10 w-32 px-3 text-sm" value={settings.reminders[k]} onChange={(e) => e.target.value && setTime(k, e.target.value)} aria-label={`שעת ${REMINDER_TITLES[k]}`} />
+        </div>
+      ))}
+      <button
+        className="btn-primary w-full"
+        disabled={!chosen.length}
+        onClick={() => {
+          downloadICS(chosen.map((k) => ({ key: k, title: REMINDER_TITLES[k], time: settings.reminders[k] })))
+          toast('פתח את הקובץ ואשר "הוסף ליומן"')
+        }}
+      >
+        <CalendarPlus size={18} /> הוסף תזכורות ליומן בטלפון
+      </button>
+      <p className="text-[11px] leading-relaxed text-zinc-500">
+        אחרי הלחיצה נפתח קובץ — בוחרים "הוסף הכל" (אייפון) או את אפליקציית היומן (אנדרואיד).
+        אם לא קורה כלום מתוך האפליקציה המותקנת, פותחים את האתר בספארי/כרום ולוחצים שוב.
+        לשינוי שעה: מוחקים את האירוע מהיומן ומוסיפים מחדש. לביטול: מוחקים את האירוע.
+      </p>
     </div>
   )
 }
@@ -156,6 +200,16 @@ export default function Settings() {
         </Section>
 
         
+        <Section title="מדדים בדף הבית">
+          <p className="pt-1 text-xs text-zinc-500">משקל תמיד מוצג. המעקב המלא זמין תמיד בלשונית מדדים.</p>
+          <div className="divide-y divide-white/5">
+            <Toggle label="סוכר בדם" checked={settings.showGlucose} onChange={(v) => updateSettings({ showGlucose: v })} />
+            <Toggle label="לחץ דם" checked={settings.showPressure} onChange={(v) => updateSettings({ showPressure: v })} />
+          </div>
+        </Section>
+
+        <Section title="תזכורות"><Reminders /></Section>
+
         <Section title="התקנה כאפליקציה"><InstallCard /></Section>
 
         <Section title="נתונים">
@@ -165,6 +219,8 @@ export default function Settings() {
             <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={doImport} />
           </div>
         </Section>
+
+        <Copyright className="mt-8" />
       </div>
 
     </>
