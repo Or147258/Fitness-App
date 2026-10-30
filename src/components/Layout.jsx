@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { Activity, CalendarDays, Dumbbell, House, Library, Timer } from 'lucide-react'
+import { Activity, CalendarDays, Dumbbell, House, Library, Timer, Utensils } from 'lucide-react'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore'
 import { useNow } from '../hooks/useNow'
@@ -10,6 +10,7 @@ import { fmtClock } from '../lib/date'
 const NAV = [
   { to: '/', label: 'בית', icon: House, end: true },
   { to: '/weight', label: 'מדדים', icon: Activity, also: ['/sugar', '/pressure'] },
+  { to: '/nutrition', label: 'תזונה', icon: Utensils },
   { to: '/workouts', label: 'אימונים', icon: Dumbbell },
   { to: '/exercises', label: 'תרגילים', icon: Library },
   { to: '/calendar', label: 'יומן', icon: CalendarDays },
@@ -46,7 +47,7 @@ export default function Layout() {
       </main>
       <ActiveBanner />
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.06] bg-ink-950/90 pb-safe backdrop-blur-xl">
-        <div className="mx-auto grid max-w-md grid-cols-5">
+        <div className="mx-auto grid max-w-md grid-cols-6">
           {NAV.map(({ to, label, icon: Icon, end, also }) => (
             <NavLink
               key={to}
@@ -60,7 +61,7 @@ export default function Layout() {
                 const isActive = exact || also?.includes(pathname)
                 return (
                 <>
-                  <span className={`grid h-7 w-12 place-items-center rounded-full transition ${isActive ? 'bg-lime-400/15' : ''}`}>
+                  <span className={`grid h-7 w-11 place-items-center rounded-full transition ${isActive ? 'bg-lime-400/15' : ''}`}>
                     <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
                   </span>
                   {label}

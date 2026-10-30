@@ -18,6 +18,7 @@ import { collection, doc, getDoc, getDocs, serverTimestamp, writeBatch } from 'f
 import { auth, db, isFirebaseConfigured } from './firebase'
 import { useStore } from '../store/useStore'
 import { computePRs } from './prs'
+import { menuTotal } from './nutrition'
 import { weekStartKey, toKey, fromKey, addDays } from './date'
 
 export const useSyncStatus = create(() => ({
@@ -95,6 +96,9 @@ function opsFor(op, state, uid) {
       const dates = [...new Set([g?.date, op.date].filter(Boolean))]
       return [...main, ...dates.flatMap((d) => weeklyAverageOps(uid, state.glucose, d, 'glucoseWeeklyAverages', (x) => x.value))]
     }
+    case 'menu':
+      // כל התפריט במסמך אחד: users/{uid}/nutrition/menu
+      return [{ type: 'set', ref: ref(uid, 'nutrition', 'menu'), data: { ...clean(state.menu), totalKcal: Math.round(menuTotal(state.menu)), updatedAt: serverTimestamp() } }]
     case 'pressure': {
       const x = state.pressure.find((y) => y.id === op.id)
       const main = op.kind === 'delete' || !x
@@ -188,7 +192,7 @@ export async function pushOutbox() {
 /** מוריד את כל הנתונים של המשתמש המחובר */
 export async function pullAll() {
   const uid = auth.currentUser.uid
-  const [w, e, p, s, u, g, bp] = await Promise.all([
+  const [w, e, p, s, u, g, bp, mn] = await Promise.all([
     getDocs(col(uid, 'weights')),
     getDocs(col(uid, 'exercises')),
     getDocs(col(uid, 'programs')),
@@ -196,6 +200,7 @@ export async function pullAll() {
     getDoc(userDoc(uid)),
     getDocs(col(uid, 'glucose')),
     getDocs(col(uid, 'bloodPressure')),
+    getDoc(ref(uid, 'nutrition', 'menu')),
   ])
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 
@@ -221,6 +226,7 @@ export async function pullAll() {
       }))
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
     settings: u.exists() ? u.data().settings : null,
+    menu: mn.exists() ? { meals: mn.data().meals ?? [] } : null,
   }))
 }
 
@@ -253,6 +259,7 @@ function keepPending(remote) {
     })(),
     sessions: merge(remote.sessions, local.sessions, 'session').sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
     settings: pending('settings').size ? null : remote.settings,
+    menu: pending('menu').size ? local.menu : remote.menu ?? local.menu,
   }
 }
 

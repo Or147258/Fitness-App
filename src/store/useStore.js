@@ -63,7 +63,18 @@ function buildActiveExercise(exerciseId, sessions, targetSets = 3, restSec = nul
   }
 }
 
+/** תפריט ברירת מחדל: ארוחות ריקות שכל אחד משנה כרצונו */
+export const DEFAULT_MENU = {
+  meals: [
+    { id: 'breakfast', name: 'בוקר', items: [] },
+    { id: 'snack1', name: 'ביניים', items: [] },
+    { id: 'lunch', name: 'צהריים', items: [] },
+    { id: 'dinner', name: 'ערב', items: [] },
+  ],
+}
+
 const initialData = {
+  menu: DEFAULT_MENU, // { meals: [{ id, name, items: [{ id, name, qty, unit: 'unit'|'g', kcal }] }] } — kcal ליחידה או ל-100 גרם
   weights: [], // { date: 'YYYY-MM-DD', kg }
   glucose: [], // מדידות סוכר: { id, date, time: 'HH:MM', value (mg/dL), context, note }
   pressure: [], // לחץ דם: { id, date, time, sys, dia, pulse, note }
@@ -123,6 +134,9 @@ export const useStore = create(
             outbox: enqueue(s.outbox, 'glucose', id, 'delete', { date: prev?.date }),
           }
         }),
+
+      /* ---------- תפריט ---------- */
+      updateMenu: (fn) => set((s) => ({ menu: fn(s.menu), outbox: enqueue(s.outbox, 'menu', 'main') })),
 
       /* ---------- לחץ דם ---------- */
       addPressure: (data) => {
@@ -393,8 +407,8 @@ export const useStore = create(
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch }, outbox: enqueue(s.outbox, 'settings', 'me') })),
 
       exportData: () => {
-        const { weights, glucose, pressure, exercises, programs, sessions, settings } = get()
-        return { app: 'fitness-app', version: 1, exportedAt: new Date().toISOString(), weights, glucose, pressure, exercises, programs, sessions, settings }
+        const { weights, glucose, pressure, menu, exercises, programs, sessions, settings } = get()
+        return { app: 'fitness-app', version: 1, exportedAt: new Date().toISOString(), weights, glucose, pressure, menu, exercises, programs, sessions, settings }
       },
 
       importData: (data) => {
@@ -403,6 +417,7 @@ export const useStore = create(
           weights: data.weights,
           glucose: data.glucose ?? [],
           pressure: data.pressure ?? [],
+          menu: data.menu ?? DEFAULT_MENU,
           exercises: data.exercises?.length ? data.exercises : BUILTIN_EXERCISES,
           programs: data.programs ?? [],
           sessions: data.sessions,
@@ -428,6 +443,7 @@ export const useStore = create(
           s.glucose.forEach((g) => { outbox = enqueue(outbox, 'glucose', g.id) })
           s.pressure.forEach((x) => { outbox = enqueue(outbox, 'pressure', x.id) })
           s.sessions.forEach((x) => { outbox = enqueue(outbox, 'session', x.id) })
+          if (s.menu?.meals.some((m) => m.items.length)) outbox = enqueue(outbox, 'menu', 'main')
           outbox = enqueue(outbox, 'settings', 'me')
           return { outbox }
         }),
@@ -435,7 +451,7 @@ export const useStore = create(
       ackOps: (ops) =>
         set((s) => ({ outbox: s.outbox.filter((o) => !ops.some((d) => d.entity === o.entity && d.id === o.id && d.at === o.at)) })),
 
-      replaceFromRemote: ({ weights, glucose, pressure, exercises, programs, sessions, settings }) =>
+      replaceFromRemote: ({ weights, glucose, pressure, menu, exercises, programs, sessions, settings }) =>
         set(() => {
           // תרגילים מובנים חדשים (אם נוספו בגרסה חדשה של האפליקציה) נשמרים גם אם עוד לא בענן
           const ids = new Set(exercises.map((e) => e.id))
@@ -443,6 +459,7 @@ export const useStore = create(
             weights,
             glucose: glucose ?? [],
             pressure: pressure ?? [],
+            menu: menu ?? DEFAULT_MENU,
             exercises: [...exercises.map(withDefaultMedia), ...BUILTIN_EXERCISES.filter((b) => !ids.has(b.id))],
             programs,
             sessions,
@@ -462,6 +479,7 @@ export const useStore = create(
         const merged = { ...current, ...persisted }
         merged.glucose = merged.glucose ?? []
         merged.pressure = merged.pressure ?? []
+        merged.menu = merged.menu ?? DEFAULT_MENU
         const ids = new Set((merged.exercises ?? []).map((e) => e.id))
         merged.exercises = [...(merged.exercises ?? []).map(withDefaultMedia), ...BUILTIN_EXERCISES.filter((b) => !ids.has(b.id))]
         merged.settings = { ...DEFAULT_SETTINGS, ...persisted?.settings, reminders: { ...DEFAULT_SETTINGS.reminders, ...persisted?.settings?.reminders } }

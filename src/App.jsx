@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import Weight from './pages/Weight'
 import Sugar from './pages/Sugar'
 import Pressure from './pages/Pressure'
+import Nutrition from './pages/Nutrition'
 import Report from './pages/Report'
 import Workouts from './pages/Workouts'
 import WorkoutEdit from './pages/WorkoutEdit'
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="weight" element={<Weight />} />
               <Route path="sugar" element={<Sugar />} />
               <Route path="pressure" element={<Pressure />} />
+              <Route path="nutrition" element={<Nutrition />} />
               <Route path="workouts" element={<Workouts />} />
               <Route path="workouts/:id" element={<WorkoutEdit />} />
               <Route path="exercises" element={<Exercises />} />
